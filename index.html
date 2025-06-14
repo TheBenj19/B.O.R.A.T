@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Tradeoak Beam Calculator</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: #f5f4e1; /* Cream color */
+            font-family: 'Roboto', Arial, sans-serif;
+            margin: 0;
+            overflow: hidden;
+            color: #333333; /* Darker text for contrast */
+        }
+
+        #volume-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: #1A1A1A;
+            color: #FFFFFF;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 16px;
+            max-width: 300px;
+            line-height: 1.5;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+
+        #volume-display button {
+            margin-top: 10px;
+            margin-right: 10px;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-family: 'Roboto', Arial, sans-serif;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background: #4CAF50;
+            color: #FFFFFF;
+            transition: background 0.3s ease;
+        }
+
+        #volume-display button:hover {
+            background: #45A049;
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1A1A1A;
+            color: #FFFFFF;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 16px;
+            text-align: center;
+            max-width: 300px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+
+        #info a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+
+        #info a:hover {
+            text-decoration: underline;
+        }
+
+        .label {
+            margin-left: 8px;
+            font-weight: 700;
+            color: #4CAF50;
+        }
+
+        /* Style lil-gui to match Tradeoak */
+        .lil-gui {
+            font-family: 'Roboto', Arial, sans-serif !important;
+            background: #1A1A1A !important;
+            color: #FFFFFF !important;
+            margin-top: 20px !important; /* Padding above controls */
+        }
+
+        .lil-gui .title {
+            background: #4CAF50 !important;
+            color: #FFFFFF !important;
+            font-weight: 700 !important;
+        }
+
+        .lil-gui .controller {
+            background: #2A2A2A !important;
+            color: #FFFFFF !important;
+        }
+
+        .lil-gui input, .lil-gui select {
+            background: #333333 !important;
+            color: #FFFFFF !important;
+            border: 1px solid #4CAF50 !important;
+        }
+
+        .lil-gui input:focus, .lil-gui select:focus {
+            outline: none !important;
+            border-color: #45A049 !important;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            #volume-display {
+                top: 10px;
+                left: 10px;
+                font-size: 14px;
+                max-width: 200px;
+                padding: 10px;
+            }
+
+            #volume-display button {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+
+            #info {
+                top: 10px;
+                font-size: 14px;
+                padding: 8px 12px;
+            }
+
+            .lil-gui {
+                font-size: 14px !important;
+                width: 200px !important;
+                margin-top: 60px !important; /* Consistent padding for mobile */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        Ben's Oustanding Revolutionary Application for Tradeoak
+    </div>
+    <div id="volume-display">
+        <span id="volume-text">Calculating volume...</span><br />
+        <div id="dimension-labels"></div>
+        <button id="reset-btn" aria-label="Reset dimensions to default">Reset</button>
+        <button id="export-btn" aria-label="Export dimensions and cost to PDF">Export</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "../build/three.webgpu.js",
+                "three/webgpu": "../build/three.webgpu.js",
+                "three/tsl": "../build/three.tsl.js",
+                "three/addons/": "./jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+        import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+        let camera, scene, renderer, controls;
+        let model, gui;
+        let originalVolume = 0;
+        let originalDimensions;
+
+        const MATERIAL_COSTS = {
+            'Green Oak (D24)': 2700,    // £2700 per m³
+            'Green Oak (D30)': 3000,    // £3000 per m³
+            'Softwood': 1800,           // £1800 per m³
+            'Kiln Dried Oak': 3500      // £3500 per m³
+        };
+
+        const DEFAULT_DIMENSIONS = {
+            width: 20,   // mm
+            height: 20,  // mm
+            length: 1000 // mm
+        };
+
+        const DEFAULT_MATERIAL = 'Green Oak (D24)';
+
+        init();
+
+        function init() {
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 20);
+            camera.position.set(-0.75, 0.7, 5);
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf5f4e1); // Match body background
+
+            renderer = new THREE.WebGPURenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1;
+            renderer.setAnimationLoop(animate);
+            container.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.target.set(0, 0.35, 0);
+            controls.update();
+
+            new RGBELoader()
+                .setPath('textures/equirectangular/')
+                .load('royal_esplanade_1k.hdr', (hdr) => {
+                    hdr.mapping = THREE.EquirectangularReflectionMapping;
+                    scene.environment = hdr;
+                });
+
+            loadModel();
+
+            window.addEventListener('resize', onWindowResize);
+
+            document.getElementById('reset-btn').onclick = () => {
+                if (!model || !gui?.controllers) return;
+                resetDimensions();
+            };
+
+            document.getElementById('export-btn').onclick = () => {
+                const { volume, cost, material } = getCurrentVolume();
+                const width = Math.round(originalDimensions.width * model.scale.x * 1000);
+                const height = Math.round(originalDimensions.height * model.scale.y * 1000);
+                const length = Math.round(originalDimensions.depth * model.scale.z * 1000);
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+
+                doc.setFontSize(16);
+                doc.text('Beam Specifications', 20, 20);
+                doc.setFontSize(12);
+                doc.text(`Material: ${material}`, 20, 30);
+                doc.text(`Width: ${width} mm`, 20, 40);
+                doc.text(`Height: ${height} mm`, 20, 50);
+                doc.text(`Length: ${length} mm`, 20, 60);
+                doc.text(`Volume: ${volume.toFixed(3)} m³`, 20, 80);
+                doc.text(`Cost: £${cost.toFixed(2)}`, 20, 90);
+                doc.text('Generated by Tradeoak Beam Visualizer', 20, 110);
+
+                doc.save('beam_specifications.pdf');
+            };
+        }
+
+        function loadModel() {
+            const textureLoader = new THREE.TextureLoader();
+            const oakTexture = textureLoader.load('/examples/textures/equirectangular/Oak.png');
+            oakTexture.mapping = THREE.UVMapping;
+            oakTexture.wrapS = THREE.RepeatWrapping;
+            oakTexture.wrapT = THREE.RepeatWrapping;
+            oakTexture.repeat.set(1, 1);
+            oakTexture.rotation = Math.PI / 2; // Rotate texture by 90 degrees clockwise
+
+            new GLTFLoader()
+                .setPath('models/gltf/')
+                .load('beam.glb', (gltf) => {
+                    model = gltf.scene;
+                    model.scale.set(1, 1, 1);
+                    scene.add(model);
+
+                    model.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material = new THREE.MeshStandardMaterial({
+                                map: oakTexture, // Apply rotated oak texture
+                                roughness: 0.7, // Moderate roughness for wood
+                                metalness: 0.0, // Non-metallic for wood
+                                side: THREE.DoubleSide // Ensure both sides render
+                            });
+                            child.material.needsUpdate = true;
+                        }
+                    });
+
+                    const bbox = new THREE.Box3().setFromObject(model);
+                    originalDimensions = {
+                        width: (bbox.max.x - bbox.min.x) / 2,
+                        height: (bbox.max.y - bbox.min.y) / 2,
+                        depth: (bbox.max.z - bbox.min.z) / 2
+                    };
+
+                    originalVolume = calculateModelVolume(model) * 0.125;
+
+                    setupGUI();
+
+                    // Run reset on first launch to set defaults and update UI
+                    resetDimensions();
+                }, undefined, (error) => {
+                    console.error(error);
+                    document.getElementById('volume-text').textContent = 'Error loading model';
+                });
+        }
+
+        function setupGUI() {
+            gui = new GUI();
+            const folder = gui.addFolder('Dimensions (mm)');
+
+            const widthDefault = DEFAULT_DIMENSIONS.width;
+            const heightDefault = DEFAULT_DIMENSIONS.height;
+            const lengthDefault = DEFAULT_DIMENSIONS.length;
+
+            const params = {
+                width: widthDefault,
+                height: heightDefault,
+                length: lengthDefault,
+                material: DEFAULT_MATERIAL
+            };
+
+            const widthCtrl = folder.add(params, 'width', 20, 400).step(1).name('Width (mm)').onChange(value => {
+                params.width = Math.round(value); // Round to nearest mm
+                model.scale.x = (params.width / 1000) / originalDimensions.width;
+                updateVolumeDisplay();
+            });
+            widthCtrl.initialValue = widthDefault;
+
+            const heightCtrl = folder.add(params, 'height', 20, 400).step(1).name('Height (mm)').onChange(value => {
+                params.height = Math.round(value); // Round to nearest mm
+                model.scale.y = (params.height / 1000) / originalDimensions.height;
+                updateVolumeDisplay();
+            });
+            heightCtrl.initialValue = heightDefault;
+
+            const lengthCtrl = folder.add(params, 'length', 100, 9000).step(1).name('Length (mm)').onChange(value => {
+                params.length = Math.round(value); // Round to nearest mm
+                model.scale.z = (params.length / 1000) / originalDimensions.depth;
+                updateVolumeDisplay();
+            });
+            lengthCtrl.initialValue = lengthDefault;
+
+            const materialFolder = gui.addFolder('Material');
+            const materialCtrl = materialFolder.add(params, 'material', Object.keys(MATERIAL_COSTS)).name('Material').onChange(() => {
+                updateVolumeDisplay();
+            });
+            materialCtrl.initialValue = DEFAULT_MATERIAL;
+
+            gui.controllers = [widthCtrl, heightCtrl, lengthCtrl, materialCtrl];
+            folder.open();
+            materialFolder.open();
+        }
+
+        function resetDimensions() {
+            const widthCtrl = gui.controllers[0];
+            const heightCtrl = gui.controllers[1];
+            const lengthCtrl = gui.controllers[2];
+            const materialCtrl = gui.controllers[3];
+
+            widthCtrl.setValue(Math.round(DEFAULT_DIMENSIONS.width));
+            heightCtrl.setValue(Math.round(DEFAULT_DIMENSIONS.height));
+            lengthCtrl.setValue(Math.round(DEFAULT_DIMENSIONS.length));
+            materialCtrl.setValue(DEFAULT_MATERIAL);
+
+            model.scale.x = (Math.round(DEFAULT_DIMENSIONS.width) / 1000) / originalDimensions.width;
+            model.scale.y = (Math.round(DEFAULT_DIMENSIONS.height) / 1000) / originalDimensions.height;
+            model.scale.z = (Math.round(DEFAULT_DIMENSIONS.length) / 1000) / originalDimensions.depth;
+
+            updateVolumeDisplay();
+        }
+
+        function calculateModelVolume(model) {
+            let total = 0;
+            model.traverse((child) => {
+                if (child.isMesh && child.geometry) {
+                    const geometry = child.geometry.clone();
+                    geometry.computeBoundingBox();
+                    const scaledVolume = calculateGeometryVolume(geometry) *
+                        child.scale.x * child.scale.y * child.scale.z;
+                    total += scaledVolume;
+                }
+            });
+            return Math.abs(total);
+        }
+
+        function calculateGeometryVolume(geometry) {
+            if (!geometry.index) geometry = geometry.toNonIndexed();
+            const pos = geometry.attributes.position.array;
+            const idx = geometry.index.array;
+            let vol = 0;
+
+            for (let i = 0; i < idx.length; i += 3) {
+                const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3;
+                const p0 = new THREE.Vector3(pos[a], pos[a + 1], pos[a + 2]);
+                const p1 = new THREE.Vector3(pos[b], pos[b + 1], pos[b + 2]);
+                const p2 = new THREE.Vector3(pos[c], pos[c + 1], pos[c + 2]);
+                vol += p0.dot(p1.cross(p2)) / 6;
+            }
+
+            return Math.abs(vol);
+        }
+
+        function getCurrentVolume() {
+            const scaledVolume = originalVolume * model.scale.x * model.scale.y * model.scale.z;
+            const material = gui.controllers[3].getValue();
+            const cost = scaledVolume * MATERIAL_COSTS[material];
+            return { volume: scaledVolume, cost, material };
+        }
+
+        function updateVolumeDisplay() {
+            const text = document.getElementById('volume-text');
+            const labels = document.getElementById('dimension-labels');
+            const { volume, cost, material } = getCurrentVolume();
+
+            const currentWidth = originalDimensions.width * model.scale.x * 1000;
+            const currentHeight = originalDimensions.height * model.scale.y * 1000;
+            const currentDepth = originalDimensions.depth * model.scale.z * 1000;
+
+            text.innerHTML = `Cost: £${cost.toFixed(2)}<br>Model Volume: ${volume.toFixed(3)} m³`;
+
+            labels.innerHTML =
+                `Material: <span class="label">${material}</span><br>` +
+                `Width: <span class="label">${Math.round(currentWidth)} mm</span><br>` +
+                `Height: <span class="label">${Math.round(currentHeight)} mm</span><br>` +
+                `Length: <span class="label">${Math.round(currentDepth)} mm</span>`;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
