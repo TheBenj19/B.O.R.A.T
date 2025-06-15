@@ -153,7 +153,7 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.165.0/build/three.webgpu.js",
+                "three": "https://unpkg.com/three@0.165.0/build/three.webgpu.js?module",
                 "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/",
                 "lil-gui": "https://unpkg.com/lil-gui@0.19.1/dist/lil-gui.esm.js"
             }
@@ -165,7 +165,6 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
-        // MODIFIED: Import GUI directly from 'lil-gui' as defined in the new importmap.
         import { GUI } from 'lil-gui';
 
         let camera, scene, renderer, controls;
@@ -255,7 +254,6 @@
 
         function loadModel() {
             const textureLoader = new THREE.TextureLoader();
-            // MODIFIED: The path is now relative. Ensure this file exists in your repository at 'textures/equirectangular/Oak.png'.
             const oakTexture = textureLoader.load('textures/equirectangular/Oak.png');
             oakTexture.mapping = THREE.UVMapping;
             oakTexture.wrapS = THREE.RepeatWrapping;
