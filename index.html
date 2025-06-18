@@ -43,8 +43,10 @@
 
         #reset-btn { background: #4CAF50; }
         #reset-btn:hover { background: #45A049; }
-        #export-btn { background: #008CBA; }
-        #export-btn:hover { background: #007B9A; }
+        #export-pdf-btn { background: #008CBA; } /* Renamed ID */
+        #export-pdf-btn:hover { background: #007B9A; }
+        #export-xlsx-btn { background: #217346; } /* NEW XLSX Button */
+        #export-xlsx-btn:hover { background: #195937; }
         #save-btn { background: #f44336; }
         #save-btn:hover { background: #d32f2f; }
 
@@ -98,7 +100,6 @@
             border-radius: 5px;
             border: 1px solid #4CAF50;
             z-index: 20;
-            transition: transform 0.3s ease-in-out;
         }
         .table-header {
             display: flex;
@@ -129,7 +130,8 @@
         <span id="volume-text">Calculating volume...</span><br />
         <div id="dimension-labels"></div>
         <button id="reset-btn">Reset</button>
-        <button id="export-btn" aria-label="Export all configurations to PDF">PDF</button>
+        <button id="export-pdf-btn" aria-label="Export all configurations to PDF">PDF</button>
+        <button id="export-xlsx-btn" aria-label="Export all configurations to XLSX">XLSX</button>
         <button id="save-btn">Save</button>
     </div>
 
@@ -150,6 +152,8 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
     <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.165.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/", "lil-gui": "https://unpkg.com/lil-gui@0.19.1/dist/lil-gui.esm.js" }}</script>
     <script type="module">
         import * as THREE from 'three';
@@ -191,7 +195,8 @@
         function setupEventListeners() {
             window.addEventListener('resize', onWindowResize);
             document.getElementById('reset-btn').onclick = resetDimensions;
-            document.getElementById('export-btn').onclick = exportConfigurations;
+            document.getElementById('export-pdf-btn').onclick = exportToPDF; // Renamed function
+            document.getElementById('export-xlsx-btn').onclick = exportToXLSX; // New event listener
             document.getElementById('save-btn').onclick = saveConfiguration;
             document.getElementById('toggle-table-btn').onclick = () => {
                 const content = document.querySelector('.table-content');
@@ -245,16 +250,11 @@
         function updateVolumeDisplay() {
             if (!model) return;
             const calcs = getCalculations();
-            
-            // MODIFIED: Text labels and styling updated
             document.getElementById('volume-text').innerHTML = `Beam Cost: <span class="label">£${calcs.totalCost.toFixed(2)}</span><br>Beam Volume: <span class="label">${calcs.singleVolume.toFixed(3)} m³</span>`;
             document.getElementById('dimension-labels').innerHTML = 
-                `Material: <span class="label">${calcs.material}</span><br>` +
-                `Finish: <span class="label">${calcs.finish}</span><br>` +
-                `Width: <span class="label">${calcs.width} mm</span><br>` +
-                `Height: <span class="label">${calcs.height} mm</span><br>` +
-                `Length: <span class="label">${calcs.length} mm</span><br>` +
-                `Quantity: <span class="label">${calcs.quantity}</span>`;
+                `Material: <span class="label">${calcs.material}</span><br>` + `Finish: <span class="label">${calcs.finish}</span><br>` +
+                `Width: <span class="label">${calcs.width} mm</span><br>` + `Height: <span class="label">${calcs.height} mm</span><br>` +
+                `Length: <span class="label">${calcs.length} mm</span><br>` + `Quantity: <span class="label">${calcs.quantity}</span>`;
         }
 
         function saveConfiguration() {
@@ -272,38 +272,28 @@
             const tableBody = document.querySelector("#saved-configs-overlay tbody");
             const tableFoot = document.querySelector("#saved-configs-overlay tfoot");
             tableBody.innerHTML = tableFoot.innerHTML = "";
-
-            if (savedConfigurations.length === 0) {
-                tableOverlay.style.display = 'none';
-                return;
-            }
+            if (savedConfigurations.length === 0) { tableOverlay.style.display = 'none'; return; }
             tableOverlay.style.display = 'flex';
-
             let grandTotalCost = 0;
             let grandTotalVolume = 0;
-
             savedConfigurations.forEach((config, index) => {
                 const lineVolume = config.singleVolume * config.quantity;
                 grandTotalCost += config.totalCost;
                 grandTotalVolume += lineVolume;
-
                 const row = tableBody.insertRow();
                 row.innerHTML = `<td>${config.material}</td><td>${config.finish}</td><td>${config.width}</td><td>${config.height}</td><td>${config.length}</td><td>${config.quantity}</td><td>${lineVolume.toFixed(3)}</td><td>£${config.totalCost.toFixed(2)}</td>
                     <td><button class="remove-btn" data-index="${index}">X</button></td>`;
             });
-
             tableFoot.innerHTML = `<tr><td colspan="6"><strong>Grand Totals</strong></td><td><strong>${grandTotalVolume.toFixed(3)}</strong></td><td><strong>£${grandTotalCost.toFixed(2)}</strong></td><td></td></tr>`;
             document.querySelectorAll('.remove-btn').forEach(b => b.onclick = (e) => removeConfiguration(e.target.dataset.index));
         }
         
-        function exportConfigurations() {
+        function exportToPDF() {
             if (savedConfigurations.length === 0) { alert("Please save at least one configuration before exporting."); return; }
-            
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             let y = 0;
-            const pageMargin = 14;
-            const cellPadding = 3;
+            const pageMargin = 14, cellPadding = 3;
             const fullWidth = doc.internal.pageSize.getWidth() - (pageMargin * 2);
             const rightEdge = pageMargin + fullWidth;
 
@@ -335,27 +325,17 @@
             
             drawPageHeader();
             drawTableHeader();
-
-            let grandTotalCost = 0;
-            let grandTotalVolume = 0;
+            let grandTotalCost = 0, grandTotalVolume = 0;
             doc.setTextColor('#000000');
             doc.setFontSize(9);
-
             savedConfigurations.forEach((config, i) => {
                 const lineVolume = config.singleVolume * config.quantity;
                 grandTotalCost += config.totalCost;
                 grandTotalVolume += lineVolume;
-                
                 const description = `${config.material} (${config.finish}) - ${config.width}x${config.height}x${config.length}mm`;
                 const textLines = doc.splitTextToSize(description, 80);
                 const lineHeight = textLines.length * 5 + 5;
-                
-                if (y + lineHeight > 275) {
-                    doc.addPage();
-                    drawPageHeader();
-                    drawTableHeader();
-                }
-                
+                if (y + lineHeight > 275) { doc.addPage(); drawPageHeader(); drawTableHeader(); }
                 doc.text(`${i + 1}`, pageMargin + cellPadding, y + 6);
                 doc.text(textLines, pageMargin + 25, y + 6);
                 doc.text(`${config.quantity}`, pageMargin + 110, y + 6);
@@ -363,20 +343,56 @@
                 doc.text(`£${config.totalCost.toFixed(2)}`, rightEdge - cellPadding, y + 6, { align: 'right' });
                 y += lineHeight;
             });
-            
             y += 5;
             doc.setDrawColor('#4CAF50');
             doc.setLineWidth(0.5);
             doc.line(pageMargin, y, rightEdge, y);
             y += 8;
-            
             doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.text('Grand Totals:', pageMargin + 105, y, {align: 'right'});
             doc.text(`${grandTotalVolume.toFixed(3)} m³`, pageMargin + 125, y);
             doc.text(`£${grandTotalCost.toFixed(2)}`, rightEdge - cellPadding, y, { align: 'right' });
-            
             doc.save('beam_specifications.pdf');
+        }
+
+        // NEW: Function to export data to an .xlsx file
+        function exportToXLSX() {
+            if (savedConfigurations.length === 0) { alert("Please save at least one configuration before exporting."); return; }
+            
+            // 1. Prepare data for the sheet
+            const dataForSheet = savedConfigurations.map((config, index) => {
+                const lineVolume = config.singleVolume * config.quantity;
+                return {
+                    'Item': index + 1,
+                    'Material': config.material,
+                    'Finish': config.finish,
+                    'Width (mm)': config.width,
+                    'Height (mm)': config.height,
+                    'Length (mm)': config.length,
+                    'Quantity': config.quantity,
+                    'Volume (m³)': parseFloat(lineVolume.toFixed(3)),
+                    'Cost (£)': parseFloat(config.totalCost.toFixed(2))
+                };
+            });
+
+            // 2. Add a totals row
+            const grandTotalVolume = savedConfigurations.reduce((sum, config) => sum + (config.singleVolume * config.quantity), 0);
+            const grandTotalCost = savedConfigurations.reduce((sum, config) => sum + config.totalCost, 0);
+            dataForSheet.push({}); // Spacer row
+            dataForSheet.push({
+                'Material': 'Grand Totals',
+                'Volume (m³)': parseFloat(grandTotalVolume.toFixed(3)),
+                'Cost (£)': parseFloat(grandTotalCost.toFixed(2))
+            });
+            
+            // 3. Create worksheet and workbook
+            const ws = XLSX.utils.json_to_sheet(dataForSheet);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Beam Specifications");
+
+            // 4. Download the file
+            XLSX.writeFile(wb, "Beam_Specifications.xlsx");
         }
 
         function onWindowResize() {
